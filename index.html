@@ -180,6 +180,10 @@ input,select{font:inherit;color:inherit}
 /* =========================================================
    設定
    ========================================================= */
+/* ★★ ここにGASウェブアプリのURL（末尾 /exec）を貼る ★★ */
+const GAS_URL='https://script.google.com/macros/s/AKfycbwwnPIFKMrknMzVIzlpUPSeEnKaKqvpSZ0Mri8UWS8R2aFVxfVsF8bw7HeC-8aajy_EWQ/exec';
+/* ★★ ここまで ★★ */
+
 const LS_URL='gakusaiShift.url', LS_NAME='gakusaiShift.name', LS_LOCAL='gakusaiShift.local', LS_DB='gakusaiShift.localdb';
 
 /* サンドボックス環境でも落ちない保存領域 */
@@ -208,13 +212,13 @@ const WORK='担当';
 
 let DB={members:[],assign:{},settings:null};
 let S=DEFAULT_SETTINGS;
-let view={screen:'home',day:0,name:'',pass:''};
+let view={screen:'member',day:0,name:'',pass:''};
 
 /* =========================================================
    通信
    ========================================================= */
 const isLocal=()=>store.get(LS_LOCAL)==='1';
-const gasUrl =()=>store.get(LS_URL)||'';
+const gasUrl =()=>store.get(LS_URL)||(/^https:\/\/script\.google\.com\/.+\/exec$/.test(GAS_URL)?GAS_URL:'');
 
 function localDB(){
   try{return JSON.parse(store.get(LS_DB)||'null')||{members:[],assign:{},settings:null};}
@@ -315,8 +319,32 @@ function nav(title,back,action){
 function render(){
   const m=$('#main');m.innerHTML='';
   if(!gasUrl()&&!isLocal())return screenSetup(m);
-  ({home:screenHome,member:screenMember,adminGate:screenAdminGate,admin:screenAdmin,
-    export:screenExport,settings:screenSettings,people:screenPeople}[view.screen]||screenHome)(m);
+  ({member:screenMember,adminHome:screenAdminHome,admin:screenAdmin,
+    export:screenExport,settings:screenSettings,people:screenPeople}[view.screen]||screenMember)(m);
+}
+
+/* タイトルを3回タップで管理者メニューを開く */
+let taps=0,tapT;
+$('#navTitle').addEventListener('click',()=>{
+  if(view.screen!=='member')return;
+  taps++;clearTimeout(tapT);tapT=setTimeout(()=>{taps=0;},1500);
+  if(taps>=3){taps=0;view.pass?go('adminHome'):askPass();}
+});
+function askPass(){
+  const bg=sheet(`<h3>管理者メニュー</h3><p class="sub">シフトの割り当てと書き出しに進みます。</p>
+    <div class="field"><label>パスワード</label><input id="pw" type="password" autocomplete="off"></div>
+    <button class="btn" id="ok" style="margin-top:12px">開く</button>
+    <button class="btn ghost" id="no" style="margin-top:4px">閉じる</button>`);
+  const inp=bg.querySelector('#pw');
+  setTimeout(()=>inp.focus(),80);
+  const enter=async()=>{
+    const p=inp.value;
+    try{ if(!isLocal())await api('checkPass',{pass:p}); view.pass=p; bg.remove(); go('adminHome'); }
+    catch(e){ toast(e.message); }
+  };
+  bg.querySelector('#ok').onclick=enter;
+  bg.querySelector('#no').onclick=()=>bg.remove();
+  inp.onkeydown=e=>{if(e.key==='Enter')enter();};
 }
 
 /* =========================================================
@@ -344,54 +372,56 @@ function screenSetup(m){
 }
 
 /* =========================================================
-   2. ホーム
+   2. 管理者メニュー（タイトル3回タップで表示）
    ========================================================= */
-function screenHome(m){
-  nav(S.title,null,null);
-  const nm=store.get(LS_NAME)||'';
-  m.appendChild(el(`<div class="lead"><h2>${esc(S.title)}</h2>
-    <p>11月13日（金）から16日（月）まで。${DB.members.length}人が希望を提出済み。</p></div>`));
-
-  const c1=el(`<div class="card">
-    <button class="row" id="toMember">
-      <span class="icn">${ico('i-person',18)}</span>
-      <span class="txt"><b>出られる時間を入力</b><span>${nm?esc(nm)+' として提出':'まずは名前から'}</span></span>
-      <span class="chev">${ico('i-chev',18)}</span></button>
-  </div>`);
-  m.appendChild(c1);
-  $('#toMember',c1).onclick=()=>{draft.init=false;go('member',{name:nm,day:0});};
+function screenAdminHome(m){
+  nav(S.title,{label:'入力へ',fn:()=>go('member')},{label:'ロック',fn:()=>{view.pass='';go('member');toast('ロックしました');}});
+  m.appendChild(el(`<div class="lead"><h2>管理者メニュー</h2>
+    <p>${DB.members.length}人が希望を提出済み。</p></div>`));
 
   const c2=el(`<div class="card">
     <button class="row" id="toAdmin">
       <span class="icn">${ico('i-grid',18)}</span>
-      <span class="txt"><b>シフトを組む</b><span>管理者用・パスワードが必要</span></span>
+      <span class="txt"><b>シフトを組む</b><span>時間帯ごとに役割を割り当てる</span></span>
       <span class="chev">${ico('i-chev',18)}</span></button>
     <button class="row" id="toExport">
       <span class="icn gray">${ico('i-export',18)}</span>
       <span class="txt"><b>シフト表を画像で書き出す</b><span>1日ごと／4日まとめ</span></span>
       <span class="chev">${ico('i-chev',18)}</span></button>
+    <button class="row" id="toPeople">
+      <span class="icn gray">${ico('i-person',18)}</span>
+      <span class="txt"><b>参加者</b><span>提出状況の確認と削除</span></span>
+      <span class="chev">${ico('i-chev',18)}</span></button>
+    <button class="row" id="toCfg">
+      <span class="icn gray">${ico('i-slider',18)}</span>
+      <span class="txt"><b>設定</b><span>時間帯・役割・必要人数</span></span>
+      <span class="chev">${ico('i-chev',18)}</span></button>
   </div>`);
   m.appendChild(c2);
-  $('#toAdmin',c2).onclick=()=>go(view.pass?'admin':'adminGate',{day:0});
+  $('#toAdmin',c2).onclick=()=>go('admin',{day:0});
   $('#toExport',c2).onclick=()=>go('export',{day:0});
+  $('#toPeople',c2).onclick=()=>go('people');
+  $('#toCfg',c2).onclick=()=>go('settings');
 
-  /* 提出状況 */
   m.appendChild(el(`<div class="card-title">提出状況</div>`));
   const c3=el(`<div class="card"></div>`);
   if(!DB.members.length){
     c3.appendChild(el(`<div class="row"><span class="txt"><b style="color:var(--sub);font-weight:400">まだ誰も提出していません</b></span></div>`));
   }else{
-    DB.members.slice(0,6).forEach(p=>{
+    DB.members.slice(0,8).forEach(p=>{
       const n=Object.values(p.slots||{}).reduce((a,v)=>a+v.length,0);
       c3.appendChild(el(`<div class="row"><span class="txt"><b>${esc(p.name)}</b><span>${n}コマ可能 ・ ${esc(p.updatedAt||'')}</span></span></div>`));
     });
-    if(DB.members.length>6)c3.appendChild(el(`<div class="row"><span class="txt"><b style="color:var(--sub);font-weight:400">ほか${DB.members.length-6}人</b></span></div>`));
+    if(DB.members.length>8)c3.appendChild(el(`<div class="row"><span class="txt"><b style="color:var(--sub);font-weight:400">ほか${DB.members.length-8}人</b></span></div>`));
   }
   m.appendChild(c3);
 
-  const foot=el(`<div style="margin-top:22px"><button class="btn ghost" id="reset">接続先を変更</button></div>`);
+  const embedded=/^https:\/\/script\.google\.com\/.+\/exec$/.test(GAS_URL);
+  const foot=el(`<div style="margin-top:22px"><button class="btn ghost" id="reload">最新の状態に更新</button>
+    ${embedded?'':'<button class="btn ghost" id="reset">接続先を変更</button>'}</div>`);
   m.appendChild(foot);
-  $('#reset',foot).onclick=async()=>{
+  $('#reload',foot).onclick=async()=>{try{await sync('bootstrap');render();toast('更新しました');}catch(e){toast(e.message);}};
+  if($('#reset',foot))$('#reset',foot).onclick=async()=>{
     if(await confirmSheet('接続先を変更しますか','この端末の接続設定を消去します。シートのデータは残ります。','変更する')){
       store.del(LS_URL);store.del(LS_LOCAL);render();
     }
@@ -407,8 +437,11 @@ function initDraft(name){
   draft={name:name||'',slots:found?JSON.parse(JSON.stringify(found.slots||{})):{},init:true};
 }
 function screenMember(m){
-  nav('出られる時間',{label:'戻る',fn:()=>{draft.init=false;go('home');}},null);
-  if(!draft.init)initDraft(view.name);
+  nav(S.title,null,view.pass?{label:'管理',fn:()=>go('adminHome')}:null);
+  if(!draft.init)initDraft(store.get(LS_NAME)||'');
+  const done=DB.members.find(p=>p.name===draft.name.trim());
+  m.appendChild(el(`<div class="lead"><h2>出られる時間を選ぶ</h2>
+    <p>11月13日（金）から16日（月）まで。${done?'提出済みです。変更したらもう一度提出してください。':'空いている時間をタップして、最後に提出してください。'}</p></div>`));
   const nameCard=el(`<div class="card pad">
     <div class="field"><label>名前</label>
       <input id="nm" placeholder="山田 太郎" value="${esc(draft.name)}" autocapitalize="off"></div>
@@ -464,8 +497,8 @@ function screenMember(m){
     try{
       await sync('saveAvailability',{name:nm,slots:draft.slots});
       store.set(LS_NAME,nm);
-      draft={name:'',slots:{},init:false};
-      toast('提出しました');go('home');
+      draft.init=false;
+      toast('提出しました。ありがとうございます');render();
     }catch(e){toast(e.message);$('#sv',save).disabled=false;}
   };
 }
@@ -473,24 +506,8 @@ function screenMember(m){
 /* =========================================================
    4. 管理者
    ========================================================= */
-function screenAdminGate(m){
-  nav('管理者',{label:'戻る',fn:()=>go('home')},null);
-  m.appendChild(el(`<div class="lead"><h2>管理者パスワード</h2><p>シフトの割り当てと設定の変更に必要です。</p></div>`));
-  const c=el(`<div class="card pad">
-    <div class="field"><label>パスワード</label><input id="pw" type="password" autocomplete="off"></div>
-    <button class="btn" id="go" style="margin-top:14px">開く</button></div>`);
-  m.appendChild(c);
-  const enter=async()=>{
-    const p=$('#pw',c).value;
-    try{ if(!isLocal())await api('checkPass',{pass:p}); view.pass=p; go('admin',{day:0}); }
-    catch(e){toast(e.message);}
-  };
-  $('#go',c).onclick=enter;
-  $('#pw',c).onkeydown=e=>{if(e.key==='Enter')enter();};
-}
-
 function screenAdmin(m){
-  nav('シフトを組む',{label:'戻る',fn:()=>go('home')},{label:'保存',fn:saveAssign});
+  nav('シフトを組む',{label:'メニュー',fn:()=>go('adminHome')},{label:'保存',fn:saveAssign});
   const d=S.days[view.day];
 
   const seg=el(`<div class="seg" role="tablist" style="margin-top:14px"></div>`);
@@ -503,14 +520,10 @@ function screenAdmin(m){
 
   const tools=el(`<div class="quick" style="padding-top:0">
     <button class="btn-sm" id="auto">${ico('i-auto',15)} この日を自動で埋める</button>
-    <button class="btn-sm" id="clr" style="color:var(--red)">この日をクリア</button>
-    <button class="btn-sm" id="people">参加者</button>
-    <button class="btn-sm" id="cfg">${ico('i-slider',15)} 設定</button></div>`);
+    <button class="btn-sm" id="clr" style="color:var(--red)">この日をクリア</button></div>`);
   m.appendChild(tools);
   $('#auto',tools).onclick=()=>{autoFill(d);render();toast('空いている枠を埋めました');};
   $('#clr',tools).onclick=async()=>{if(await confirmSheet('この日をクリア',`${d.key} の割り当てをすべて消します。`,'クリアする')){DB.assign[d.key]={};render();}};
-  $('#people',tools).onclick=()=>go('people');
-  $('#cfg',tools).onclick=()=>go('settings');
 
   hoursOf(d).forEach(h=>{
     const need=needOf(d,h), fil=filled(d,h), ok=fil>=need;
@@ -584,7 +597,7 @@ async function saveAssign(){
 
 /* ---------- 参加者一覧 ---------- */
 function screenPeople(m){
-  nav('参加者',{label:'戻る',fn:()=>go('admin')},null);
+  nav('参加者',{label:'メニュー',fn:()=>go('adminHome')},null);
   m.appendChild(el(`<div class="lead"><h2>参加者 ${DB.members.length}人</h2><p>提出された希望コマ数と担当コマ数。</p></div>`));
   const c=el(`<div class="card"></div>`);
   if(!DB.members.length)c.appendChild(el(`<div class="row"><span class="txt"><b style="font-weight:400;color:var(--sub)">まだ提出がありません</b></span></div>`));
@@ -604,7 +617,7 @@ function screenPeople(m){
 
 /* ---------- 設定 ---------- */
 function screenSettings(m){
-  nav('設定',{label:'戻る',fn:()=>go('admin')},null);
+  nav('設定',{label:'メニュー',fn:()=>go('adminHome')},null);
   const s=JSON.parse(JSON.stringify(S));
   const c0=el(`<div class="card pad"><div class="field"><label>シフト表のタイトル</label>
     <input id="ttl" value="${esc(s.title)}"></div></div>`);
@@ -658,7 +671,7 @@ function screenSettings(m){
       else s.days[i][inp.dataset.k]=+inp.value;
     });
     c2.querySelectorAll('input').forEach(inp=>{s.roles[+inp.dataset.i][inp.dataset.r]=+inp.value;});
-    try{await sync('saveSettings',{settings:s,pass:view.pass});toast('保存しました');go('admin');}
+    try{await sync('saveSettings',{settings:s,pass:view.pass});toast('保存しました');go('adminHome');}
     catch(e){toast(e.message);}
   };
 }
@@ -668,7 +681,7 @@ function screenSettings(m){
    ========================================================= */
 let exMode='day';
 function screenExport(m){
-  nav('画像で書き出す',{label:'戻る',fn:()=>go('home')},null);
+  nav('画像で書き出す',{label:'メニュー',fn:()=>go('adminHome')},null);
   const seg=el(`<div class="seg" style="margin-top:14px">
     <button data-m="day" aria-selected="${exMode==='day'}"><b>1日ごと</b><small>4枚に分ける</small></button>
     <button data-m="all" aria-selected="${exMode==='all'}"><b>4日まとめ</b><small>1枚にする</small></button></div>`);
