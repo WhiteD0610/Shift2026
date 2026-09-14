@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F2F2F7">
+<title>学祭シフト</title>
+<style>
+:root{
+  --bg:#F2F2F7; --card:#FFFFFF; --text:#1D1D1F; --sub:#8A8A8E; --faint:#C7C7CC;
+  --sep:#E5E5EA; --blue:#0071E3; --blue-soft:#EAF3FE; --green:#34C759;
+  --red:#FF3B30; --orange:#FF9500; --fill:#F7F7FA;
+  --r-card:18px; --r-btn:12px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none !important}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  font-size:16px; line-height:1.5; letter-spacing:.01em;
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input,select{font:inherit;color:inherit}
+
+/* ---------- ナビゲーション ---------- */
+.nav{
+  position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:4px;
+  height:52px; padding:0 12px; background:rgba(242,242,247,.82);
+  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:.5px solid var(--sep);
+}
+.nav h1{flex:1;margin:0;font-size:17px;font-weight:600;text-align:center;letter-spacing:.02em}
+.nav .slot{min-width:76px;display:flex;align-items:center}
+.nav .slot.right{justify-content:flex-end}
+.navbtn{display:inline-flex;align-items:center;gap:3px;color:var(--blue);font-size:16px;padding:6px 4px;border-radius:8px}
+.navbtn:active{opacity:.4}
+
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 64px}
+.lead{margin:22px 2px 18px}
+.lead h2{margin:0 0 6px;font-size:30px;font-weight:700;letter-spacing:-.02em}
+.lead p{margin:0;color:var(--sub);font-size:14.5px}
+
+.card{background:var(--card);border-radius:var(--r-card);padding:4px 16px;margin:0 0 16px;
+  box-shadow:0 1px 2px rgba(0,0,0,.045)}
+.card.pad{padding:18px 16px}
+.card-title{font-size:12.5px;font-weight:600;color:var(--sub);margin:18px 4px 8px;letter-spacing:.03em}
+
+.row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:.5px solid var(--sep);text-align:left;width:100%}
+.row:last-child{border-bottom:0}
+.row .icn{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff;background:var(--blue)}
+.row .icn.gray{background:#8E8E93}
+.row .txt{flex:1;min-width:0}
+.row .txt b{display:block;font-weight:500;font-size:16.5px}
+.row .txt span{display:block;color:var(--sub);font-size:13px;margin-top:1px}
+.row .chev{color:var(--faint);flex:none}
+.row:active{background:var(--fill)}
+
+.btn{display:block;width:100%;padding:14px;border-radius:var(--r-btn);background:var(--blue);color:#fff;
+  font-weight:600;font-size:16.5px;text-align:center;transition:opacity .15s}
+.btn:active{opacity:.7}
+.btn.sec{background:var(--fill);color:var(--blue)}
+.btn.ghost{background:transparent;color:var(--blue);font-weight:500}
+.btn.danger{background:transparent;color:var(--red)}
+.btn[disabled]{opacity:.35;pointer-events:none}
+.btn-sm{padding:9px 16px;border-radius:980px;font-size:14.5px;font-weight:500;background:var(--fill);color:var(--blue)}
+
+.field{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-bottom:.5px solid var(--sep)}
+.field:last-child{border-bottom:0}
+.field label{font-size:13px;color:var(--sub)}
+.field input,.field select{width:100%;padding:11px 12px;border:1px solid var(--sep);border-radius:10px;background:#fff;font-size:16px}
+.field input:focus,.field select:focus{outline:none;border-color:var(--blue)}
+.hint{color:var(--sub);font-size:13px;margin:10px 4px 0;line-height:1.6}
+
+/* ---------- セグメント（日付タブ） ---------- */
+.seg{display:flex;gap:2px;background:#E9E9EE;border-radius:11px;padding:2px;margin:4px 0 16px}
+.seg button{flex:1;padding:8px 2px;border-radius:9px;font-size:13.5px;font-weight:500;color:var(--text);
+  line-height:1.25;transition:background .18s}
+.seg button b{display:block;font-size:15px;font-weight:600}
+.seg button small{color:var(--sub);font-size:11px}
+.seg button[aria-selected="true"]{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.seg button[aria-selected="true"] small{color:var(--blue)}
+
+/* ---------- 希望入力グリッド ---------- */
+.slotlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;padding:14px 0}
+.slot{display:flex;align-items:center;gap:9px;padding:11px 12px;border-radius:12px;background:var(--fill);
+  border:1.5px solid transparent;font-size:15px;font-variant-numeric:tabular-nums;transition:.15s}
+.slot .mark{width:21px;height:21px;border-radius:50%;border:1.5px solid var(--faint);flex:none;display:grid;place-items:center;color:#fff}
+.slot .mark svg{opacity:0}
+.slot[aria-pressed="true"]{background:var(--blue-soft);border-color:var(--blue);color:var(--blue);font-weight:600}
+.slot[aria-pressed="true"] .mark{background:var(--blue);border-color:var(--blue)}
+.slot[aria-pressed="true"] .mark svg{opacity:1}
+.slot.open::after{content:'営業';margin-left:auto;font-size:10.5px;color:var(--orange);font-weight:600}
+.quick{display:flex;gap:8px;flex-wrap:wrap;padding:12px 0 4px}
+
+/* ---------- 管理者：時間帯カード ---------- */
+.hour{background:var(--card);border-radius:var(--r-card);margin-bottom:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.045)}
+.hour>.head{display:flex;align-items:center;gap:10px;padding:13px 16px}
+.hour>.head .time{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.hour>.head .tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:980px;background:#FFF4E5;color:#B35C00}
+.pill{margin-left:auto;font-size:12px;font-weight:600;padding:3px 10px;border-radius:980px}
+.pill.ok{background:#E7F8EC;color:#1B7F3B}
+.pill.ng{background:#FFECEB;color:#C32A22}
+.hour .body{padding:0 16px 14px}
+.group{padding:10px 0;border-top:.5px solid var(--sep)}
+.group .gname{font-size:12.5px;color:var(--sub);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.group .gname i{width:7px;height:7px;border-radius:50%;background:var(--blue);font-style:normal}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:980px;background:var(--blue-soft);
+  color:var(--blue);font-size:14px;font-weight:500}
+.chip .x{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:rgba(0,113,227,.18)}
+.chip.add{background:var(--fill);color:var(--sub);border:1px dashed var(--faint)}
+.chip.ghost{background:var(--fill);color:var(--sub)}
+.empty{color:var(--faint);font-size:13.5px;padding:2px 0}
+
+/* ---------- モーダル ---------- */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:560px;max-height:82vh;overflow:auto;background:#fff;border-radius:20px 20px 0 0;
+  padding:8px 16px calc(20px + env(safe-area-inset-bottom));animation:up .26s cubic-bezier(.32,.72,0,1)}
+@keyframes up{from{transform:translateY(100%)}}
+@media (min-width:600px){
+  .sheet-bg{align-items:center}
+  .sheet{border-radius:20px;animation:pop .2s ease}
+  @keyframes pop{from{transform:scale(.94);opacity:0}}
+}
+.grab{width:36px;height:5px;border-radius:3px;background:#DDD;margin:6px auto 12px}
+.sheet h3{margin:0 0 4px;font-size:19px;font-weight:600}
+.sheet .sub{color:var(--sub);font-size:13.5px;margin:0 0 12px}
+.plist{display:flex;flex-direction:column}
+.plist button{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:.5px solid var(--sep);text-align:left}
+.plist button:active{background:var(--fill)}
+.plist .av{width:32px;height:32px;border-radius:50%;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;
+  font-size:13px;font-weight:600;flex:none}
+.plist .nm{flex:1}
+.plist .nm small{display:block;color:var(--sub);font-size:12px}
+
+/* ---------- 出力プレビュー ---------- */
+.preview{background:#fff;border-radius:14px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:14px}
+.preview img{width:100%;display:block;border-radius:8px}
+
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:rgba(28,28,30,.94);color:#fff;padding:11px 20px;border-radius:980px;font-size:14.5px;z-index:99;
+  transition:.25s;pointer-events:none;max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.load{display:grid;place-items:center;padding:60px 0;color:var(--sub);font-size:14px;gap:14px}
+.spin{width:22px;height:22px;border:2px solid var(--sep);border-top-color:var(--blue);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+
+<!-- アイコン定義（絵文字不使用・図形のみ） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4.8 20c.9-3.7 3.8-5.6 7.2-5.6s6.3 1.9 7.2 5.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.2" y="4.6" width="17.6" height="15.2" rx="3" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M3.2 9.4h17.6M9 9.4v10.4M14.8 9.4v10.4" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-slider" viewBox="0 0 24 24"><path d="M4 8h16M4 16h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="9.5" cy="8" r="2.6" fill="currentColor"/><circle cx="15" cy="16" r="2.6" fill="currentColor"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><rect x="3.4" y="4" width="17.2" height="12.6" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 8.6v6M9.2 12l2.8 2.8 2.8-2.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 20h9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.2 4.2 0 0 0 6 0l2.4-2.4a4.2 4.2 0 0 0-6-6L11.2 6.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M14 10a4.2 4.2 0 0 0-6 0l-2.4 2.4a4.2 4.2 0 0 0 6 6l1.2-1.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><path d="M12 4v3M12 17v3M4 12h3M17 12h3M6.3 6.3l2.1 2.1M15.6 15.6l2.1 2.1M17.7 6.3l-2.1 2.1M8.4 15.6l-2.1 2.1" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.9"/></symbol>
+</svg>
+
+<header class="nav">
+  <div class="slot"><button class="navbtn" id="navBack" hidden><svg width="20" height="20"><use href="#i-back"/></svg><span id="navBackTxt">戻る</span></button></div>
+  <h1 id="navTitle">学祭シフト</h1>
+  <div class="slot right"><button class="navbtn" id="navAction" hidden></button></div>
+</header>
+
+<main class="wrap" id="main"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   設定
+   ========================================================= */
+const LS_URL='gakusaiShift.url', LS_NAME='gakusaiShift.name', LS_LOCAL='gakusaiShift.local', LS_DB='gakusaiShift.localdb';
+
+/* サンドボックス環境でも落ちない保存領域 */
+const store=(()=>{
+  const mem={};
+  try{ localStorage.setItem('__t','1'); localStorage.removeItem('__t');
+    return {get:k=>localStorage.getItem(k),set:(k,v)=>localStorage.setItem(k,v),del:k=>localStorage.removeItem(k)};
+  }catch(e){ return {get:k=>(k in mem?mem[k]:null),set:(k,v)=>{mem[k]=String(v);},del:k=>{delete mem[k];}}; }
+})();
+
+const DEFAULT_SETTINGS={
+  title:'学祭シフト',
+  days:[
+    {key:'11/13',dow:'金',label:'準備日',   start:9,end:18,open:null,     need:4},
+    {key:'11/14',dow:'土',label:'学祭 1日目',start:8,end:19,open:[10,17],need:4},
+    {key:'11/15',dow:'日',label:'学祭 2日目',start:8,end:19,open:[10,17],need:4},
+    {key:'11/16',dow:'月',label:'片付け日', start:9,end:17,open:null,     need:4}
+  ],
+  roles:[
+    {name:'会計・受付',min:2,max:2},
+    {name:'調理',      min:2,max:3},
+    {name:'お渡し',    min:1,max:1}
+  ]
+};
+const WORK='担当';
+
+let DB={members:[],assign:{},settings:null};
+let S=DEFAULT_SETTINGS;
+let view={screen:'home',day:0,name:'',pass:''};
+
+/* =========================================================
+   通信
+   ========================================================= */
+const isLocal=()=>store.get(LS_LOCAL)==='1';
+const gasUrl =()=>store.get(LS_URL)||'';
+
+function localDB(){
+  try{return JSON.parse(store.get(LS_DB)||'null')||{members:[],assign:{},settings:null};}
+  catch(e){return {members:[],assign:{},settings:null};}
+}
+function localSave(db){store.set(LS_DB,JSON.stringify(db));return db;}
+
+async function api(action,payload={}){
+  if(isLocal()){
+    const db=localDB();
+    if(action==='saveAvailability'){
+      const i=db.members.findIndex(m=>m.name===payload.name);
+      const rec={name:payload.name,slots:payload.slots,updatedAt:stamp()};
+      if(i<0)db.members.push(rec); else db.members[i]=rec;
+    }
+    if(action==='saveAssign')  db.assign=payload.assign;
+    if(action==='saveSettings')db.settings=payload.settings;
+    if(action==='deleteMember')db.members=db.members.filter(m=>m.name!==payload.name);
+    return localSave(db);
+  }
+  const res=await fetch(gasUrl(),{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(Object.assign({action},payload))
+  });
+  const j=await res.json();
+  if(!j.ok)throw new Error(j.error||'通信に失敗しました');
+  return j.data;
+}
+function stamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
+
+async function sync(action,payload){
+  DB=await api(action,payload||{});
+  S=Object.assign({},DEFAULT_SETTINGS,DB.settings||{});
+  if(!DB.assign)DB.assign={};
+  return DB;
+}
+
+/* =========================================================
+   小物
+   ========================================================= */
+const $=(s,r=document)=>r.querySelector(s);
+const el=(h)=>{const t=document.createElement('template');t.innerHTML=h.trim();return t.content.firstElementChild;};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ico=(id,sz=20)=>`<svg width="${sz}" height="${sz}" aria-hidden="true"><use href="#${id}"/></svg>`;
+const hhmm=h=>`${h}:00`;
+const range=(a,b)=>{const r=[];for(let i=a;i<b;i++)r.push(i);return r;};
+const isOpen=(d,h)=>!!(d.open&&h>=d.open[0]&&h<d.open[1]);
+const hoursOf=d=>range(d.start,d.end);
+
+let toastT;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2000);}
+
+function sheet(html){
+  const bg=el(`<div class="sheet-bg"><div class="sheet"><div class="grab"></div>${html}</div></div>`);
+  bg.addEventListener('click',e=>{if(e.target===bg)bg.remove();});
+  document.body.appendChild(bg);
+  return bg;
+}
+function confirmSheet(title,msg,okLabel){
+  return new Promise(resolve=>{
+    const bg=sheet(`<h3>${esc(title)}</h3><p class="sub">${esc(msg)}</p>
+      <button class="btn" data-ok style="background:var(--red)">${esc(okLabel)}</button>
+      <button class="btn ghost" data-no style="margin-top:6px">キャンセル</button>`);
+    bg.querySelector('[data-ok]').onclick=()=>{bg.remove();resolve(true);};
+    bg.querySelector('[data-no]').onclick=()=>{bg.remove();resolve(false);};
+  });
+}
+
+/* 割当ヘルパ */
+const listAt=(dk,h)=>((DB.assign[dk]||{})[h]||[]);
+function setAt(dk,h,arr){ if(!DB.assign[dk])DB.assign[dk]={}; DB.assign[dk][h]=arr; }
+const availAt=(dk,h)=>DB.members.filter(m=>(m.slots&&m.slots[dk]||[]).includes(h)).map(m=>m.name);
+const loadOf=nm=>{let n=0;for(const dk in DB.assign)for(const h in DB.assign[dk])n+=DB.assign[dk][h].filter(x=>x.n===nm).length;return n;};
+function needOf(d,h){
+  if(isOpen(d,h))return S.roles.reduce((a,r)=>a+r.min,0);
+  return d.need||0;
+}
+function filled(d,h){
+  const l=listAt(d.key,h);
+  if(!isOpen(d,h))return l.length;
+  return S.roles.reduce((a,r)=>a+Math.min(l.filter(x=>x.r===r.name).length,r.min),0);
+}
+
+/* =========================================================
+   ルーティング
+   ========================================================= */
+function go(screen,opt={}){Object.assign(view,{screen},opt);render();}
+
+function nav(title,back,action){
+  $('#navTitle').textContent=title;
+  const b=$('#navBack');b.hidden=!back;
+  if(back){$('#navBackTxt').textContent=back.label;b.onclick=back.fn;}
+  const a=$('#navAction');a.hidden=!action;
+  if(action){a.innerHTML=esc(action.label);a.onclick=action.fn;}
+}
+
+function render(){
+  const m=$('#main');m.innerHTML='';
+  if(!gasUrl()&&!isLocal())return screenSetup(m);
+  ({home:screenHome,member:screenMember,adminGate:screenAdminGate,admin:screenAdmin,
+    export:screenExport,settings:screenSettings,people:screenPeople}[view.screen]||screenHome)(m);
+}
+
+/* =========================================================
+   1. 接続設定
+   ========================================================= */
+function screenSetup(m){
+  nav('接続',null,null);
+  m.appendChild(el(`<div class="lead"><h2>はじめに接続先を設定</h2>
+    <p>全員の希望を集めるために、Googleスプレッドシートに接続します。配布されたURLを貼り付けてください。</p></div>`));
+  const c=el(`<div class="card pad">
+    <div class="field"><label>GASウェブアプリのURL</label>
+      <input id="url" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocapitalize="off" spellcheck="false"></div>
+    <button class="btn" id="save" style="margin-top:14px">接続して始める</button>
+    <button class="btn ghost" id="local" style="margin-top:4px">この端末だけで試す</button>
+    <p class="hint">「この端末だけで試す」を選ぶと、データは端末内に保存され共有されません。動作確認用です。</p>
+  </div>`);
+  m.appendChild(c);
+  $('#save',c).onclick=async()=>{
+    const u=$('#url',c).value.trim();
+    if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(u))return toast('URLの形式が違います（末尾は /exec）');
+    store.set(LS_URL,u);store.del(LS_LOCAL);
+    await boot();
+  };
+  $('#local',c).onclick=async()=>{store.set(LS_LOCAL,'1');await boot();};
+}
+
+/* =========================================================
+   2. ホーム
+   ========================================================= */
+function screenHome(m){
+  nav(S.title,null,null);
+  const nm=store.get(LS_NAME)||'';
+  m.appendChild(el(`<div class="lead"><h2>${esc(S.title)}</h2>
+    <p>11月13日（金）から16日（月）まで。${DB.members.length}人が希望を提出済み。</p></div>`));
+
+  const c1=el(`<div class="card">
+    <button class="row" id="toMember">
+      <span class="icn">${ico('i-person',18)}</span>
+      <span class="txt"><b>出られる時間を入力</b><span>${nm?esc(nm)+' として提出':'まずは名前から'}</span></span>
+      <span class="chev">${ico('i-chev',18)}</span></button>
+  </div>`);
+  m.appendChild(c1);
+  $('#toMember',c1).onclick=()=>{draft.init=false;go('member',{name:nm,day:0});};
+
+  const c2=el(`<div class="card">
+    <button class="row" id="toAdmin">
+      <span class="icn">${ico('i-grid',18)}</span>
+      <span class="txt"><b>シフトを組む</b><span>管理者用・パスワードが必要</span></span>
+      <span class="chev">${ico('i-chev',18)}</span></button>
+    <button class="row" id="toExport">
+      <span class="icn gray">${ico('i-export',18)}</span>
+      <span class="txt"><b>シフト表を画像で書き出す</b><span>1日ごと／4日まとめ</span></span>
+      <span class="chev">${ico('i-chev',18)}</span></button>
+  </div>`);
+  m.appendChild(c2);
+  $('#toAdmin',c2).onclick=()=>go(view.pass?'admin':'adminGate',{day:0});
+  $('#toExport',c2).onclick=()=>go('export',{day:0});
+
+  /* 提出状況 */
+  m.appendChild(el(`<div class="card-title">提出状況</div>`));
+  const c3=el(`<div class="card"></div>`);
+  if(!DB.members.length){
+    c3.appendChild(el(`<div class="row"><span class="txt"><b style="color:var(--sub);font-weight:400">まだ誰も提出していません</b></span></div>`));
+  }else{
+    DB.members.slice(0,6).forEach(p=>{
+      const n=Object.values(p.slots||{}).reduce((a,v)=>a+v.length,0);
+      c3.appendChild(el(`<div class="row"><span class="txt"><b>${esc(p.name)}</b><span>${n}コマ可能 ・ ${esc(p.updatedAt||'')}</span></span></div>`));
+    });
+    if(DB.members.length>6)c3.appendChild(el(`<div class="row"><span class="txt"><b style="color:var(--sub);font-weight:400">ほか${DB.members.length-6}人</b></span></div>`));
+  }
+  m.appendChild(c3);
+
+  const foot=el(`<div style="margin-top:22px"><button class="btn ghost" id="reset">接続先を変更</button></div>`);
+  m.appendChild(foot);
+  $('#reset',foot).onclick=async()=>{
+    if(await confirmSheet('接続先を変更しますか','この端末の接続設定を消去します。シートのデータは残ります。','変更する')){
+      store.del(LS_URL);store.del(LS_LOCAL);render();
+    }
+  };
+}
+
+/* =========================================================
+   3. 希望シフト入力
+   ========================================================= */
+let draft={name:'',slots:{},init:false};
+function initDraft(name){
+  const found=DB.members.find(p=>p.name===name);
+  draft={name:name||'',slots:found?JSON.parse(JSON.stringify(found.slots||{})):{},init:true};
+}
+function screenMember(m){
+  nav('出られる時間',{label:'戻る',fn:()=>{draft.init=false;go('home');}},null);
+  if(!draft.init)initDraft(view.name);
+  const nameCard=el(`<div class="card pad">
+    <div class="field"><label>名前</label>
+      <input id="nm" placeholder="山田 太郎" value="${esc(draft.name)}" autocapitalize="off"></div>
+    <p class="hint">同じ名前で入力すると前回の内容を上書きします。</p></div>`);
+  m.appendChild(nameCard);
+  $('#nm',nameCard).oninput=e=>{draft.name=e.target.value;};
+
+  const seg=el(`<div class="seg" role="tablist"></div>`);
+  S.days.forEach((d,i)=>{
+    const b=el(`<button role="tab" aria-selected="${i===view.day}"><b>${esc(d.key)}</b><small>${esc(d.dow)}・${esc(d.label)}</small></button>`);
+    b.onclick=()=>{view.day=i;render();};
+    seg.appendChild(b);
+  });
+  m.appendChild(seg);
+
+  const d=S.days[view.day];
+  const sel=draft.slots[d.key]||(draft.slots[d.key]=[]);
+  const card=el(`<div class="card pad"></div>`);
+  const q=el(`<div class="quick">
+    <button class="btn-sm" data-a="all">この日すべて</button>
+    <button class="btn-sm" data-a="am">午前だけ</button>
+    <button class="btn-sm" data-a="pm">午後だけ</button>
+    <button class="btn-sm" data-a="none" style="color:var(--red)">クリア</button></div>`);
+  card.appendChild(q);
+  const list=el(`<div class="slotlist"></div>`);
+  hoursOf(d).forEach(h=>{
+    const on=sel.includes(h);
+    const b=el(`<button class="slot${isOpen(d,h)?' open':''}" aria-pressed="${on}">
+      <span class="mark">${ico('i-check',13)}</span><span>${hhmm(h)}–${hhmm(h+1)}</span></button>`);
+    b.onclick=()=>{
+      const i=sel.indexOf(h); if(i<0)sel.push(h); else sel.splice(i,1);
+      b.setAttribute('aria-pressed',sel.includes(h));
+    };
+    list.appendChild(b);
+  });
+  card.appendChild(list);
+  q.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    const a=b.dataset.a, hs=hoursOf(d);
+    draft.slots[d.key]= a==='all'?hs.slice() : a==='am'?hs.filter(h=>h<12) : a==='pm'?hs.filter(h=>h>=12) : [];
+    render();
+  });
+  m.appendChild(card);
+
+  const total=Object.values(draft.slots).reduce((a,v)=>a+v.length,0);
+  const save=el(`<div style="margin-top:18px">
+    <button class="btn" id="sv">提出する（全${total}コマ）</button>
+    <p class="hint">4日分をまとめて提出します。あとから何度でも出し直せます。</p></div>`);
+  m.appendChild(save);
+  $('#sv',save).onclick=async()=>{
+    const nm=draft.name.trim();
+    if(!nm)return toast('名前を入力してください');
+    $('#sv',save).disabled=true;
+    try{
+      await sync('saveAvailability',{name:nm,slots:draft.slots});
+      store.set(LS_NAME,nm);
+      draft={name:'',slots:{},init:false};
+      toast('提出しました');go('home');
+    }catch(e){toast(e.message);$('#sv',save).disabled=false;}
+  };
+}
+
+/* =========================================================
+   4. 管理者
+   ========================================================= */
+function screenAdminGate(m){
+  nav('管理者',{label:'戻る',fn:()=>go('home')},null);
+  m.appendChild(el(`<div class="lead"><h2>管理者パスワード</h2><p>シフトの割り当てと設定の変更に必要です。</p></div>`));
+  const c=el(`<div class="card pad">
+    <div class="field"><label>パスワード</label><input id="pw" type="password" autocomplete="off"></div>
+    <button class="btn" id="go" style="margin-top:14px">開く</button></div>`);
+  m.appendChild(c);
+  const enter=async()=>{
+    const p=$('#pw',c).value;
+    try{ if(!isLocal())await api('checkPass',{pass:p}); view.pass=p; go('admin',{day:0}); }
+    catch(e){toast(e.message);}
+  };
+  $('#go',c).onclick=enter;
+  $('#pw',c).onkeydown=e=>{if(e.key==='Enter')enter();};
+}
+
+function screenAdmin(m){
+  nav('シフトを組む',{label:'戻る',fn:()=>go('home')},{label:'保存',fn:saveAssign});
+  const d=S.days[view.day];
+
+  const seg=el(`<div class="seg" role="tablist" style="margin-top:14px"></div>`);
+  S.days.forEach((dd,i)=>{
+    const b=el(`<button role="tab" aria-selected="${i===view.day}"><b>${esc(dd.key)}</b><small>${esc(dd.dow)}・${esc(dd.label)}</small></button>`);
+    b.onclick=()=>{view.day=i;render();};
+    seg.appendChild(b);
+  });
+  m.appendChild(seg);
+
+  const tools=el(`<div class="quick" style="padding-top:0">
+    <button class="btn-sm" id="auto">${ico('i-auto',15)} この日を自動で埋める</button>
+    <button class="btn-sm" id="clr" style="color:var(--red)">この日をクリア</button>
+    <button class="btn-sm" id="people">参加者</button>
+    <button class="btn-sm" id="cfg">${ico('i-slider',15)} 設定</button></div>`);
+  m.appendChild(tools);
+  $('#auto',tools).onclick=()=>{autoFill(d);render();toast('空いている枠を埋めました');};
+  $('#clr',tools).onclick=async()=>{if(await confirmSheet('この日をクリア',`${d.key} の割り当てをすべて消します。`,'クリアする')){DB.assign[d.key]={};render();}};
+  $('#people',tools).onclick=()=>go('people');
+  $('#cfg',tools).onclick=()=>go('settings');
+
+  hoursOf(d).forEach(h=>{
+    const need=needOf(d,h), fil=filled(d,h), ok=fil>=need;
+    const box=el(`<section class="hour">
+      <div class="head">
+        <span class="time">${hhmm(h)}–${hhmm(h+1)}</span>
+        ${isOpen(d,h)?'<span class="tag">営業</span>':''}
+        <span class="pill ${ok?'ok':'ng'}">${fil}/${need}人</span>
+      </div><div class="body"></div></section>`);
+    const body=$('.body',box);
+    const groups=isOpen(d,h)?S.roles.map(r=>({name:r.name,min:r.min,max:r.max})):[{name:WORK,min:d.need||0,max:99}];
+    groups.forEach(g=>{
+      const mem=listAt(d.key,h).filter(x=>(x.r||WORK)===g.name);
+      const wrap=el(`<div class="group"><div class="gname"><i style="background:${g.name===WORK?'#8E8E93':'var(--blue)'}"></i>${esc(g.name)}　${mem.length}/${g.max>50?g.min+'人以上':g.min===g.max?g.min+'人':g.min+'〜'+g.max+'人'}</div><div class="chips"></div></div>`);
+      const chips=$('.chips',wrap);
+      mem.forEach(x=>{
+        const c=el(`<button class="chip">${esc(x.n)}<span class="x">${ico('i-x',9)}</span></button>`);
+        c.onclick=()=>{setAt(d.key,h,listAt(d.key,h).filter(y=>y!==x));render();};
+        chips.appendChild(c);
+      });
+      const add=el(`<button class="chip add">${ico('i-plus',13)} 追加</button>`);
+      add.onclick=()=>pickPerson(d,h,g.name);
+      chips.appendChild(add);
+      body.appendChild(wrap);
+    });
+    m.appendChild(box);
+  });
+
+  const sv=el(`<div style="margin-top:16px"><button class="btn" id="sv2">保存する</button>
+    <p class="hint">保存するまで、ほかの人の画面には反映されません。</p></div>`);
+  m.appendChild(sv);
+  $('#sv2',sv).onclick=saveAssign;
+}
+
+function pickPerson(d,h,role){
+  const used=listAt(d.key,h).map(x=>x.n);
+  const cand=availAt(d.key,h).filter(n=>!used.includes(n));
+  const other=DB.members.map(m=>m.name).filter(n=>!used.includes(n)&&!cand.includes(n));
+  const line=n=>`<button data-n="${esc(n)}"><span class="av">${esc(n.slice(0,1))}</span>
+      <span class="nm">${esc(n)}<small>全体で${loadOf(n)}コマ担当</small></span>${ico('i-plus',18)}</button>`;
+  const bg=sheet(`<h3>${esc(role)} に追加</h3>
+    <p class="sub">${d.key}（${d.dow}） ${hhmm(h)}–${hhmm(h+1)} に出られる人</p>
+    <div class="plist">${cand.length?cand.map(line).join(''):'<div class="empty" style="padding:10px 0">この時間に出られる人がいません</div>'}</div>
+    ${other.length?`<div class="card-title" style="margin-left:0">希望を出していない人</div><div class="plist">${other.map(line).join('')}</div>`:''}`);
+  bg.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{
+    setAt(d.key,h,listAt(d.key,h).concat([{n:b.dataset.n,r:role===WORK?null:role}]));
+    bg.remove();render();
+  });
+}
+
+function autoFill(d){
+  hoursOf(d).forEach(h=>{
+    const groups=isOpen(d,h)?S.roles.map(r=>({name:r.name,min:r.min})):[{name:null,min:d.need||0}];
+    groups.forEach(g=>{
+      let cur=listAt(d.key,h).filter(x=>(x.r||WORK)===(g.name||WORK)).length;
+      while(cur<g.min){
+        const used=listAt(d.key,h).map(x=>x.n);
+        const cand=availAt(d.key,h).filter(n=>!used.includes(n)).sort((a,b)=>loadOf(a)-loadOf(b));
+        if(!cand.length)break;
+        setAt(d.key,h,listAt(d.key,h).concat([{n:cand[0],r:g.name}]));
+        cur++;
+      }
+    });
+  });
+}
+
+async function saveAssign(){
+  try{ await sync('saveAssign',{assign:DB.assign,pass:view.pass}); toast('保存しました'); }
+  catch(e){ toast(e.message); }
+}
+
+/* ---------- 参加者一覧 ---------- */
+function screenPeople(m){
+  nav('参加者',{label:'戻る',fn:()=>go('admin')},null);
+  m.appendChild(el(`<div class="lead"><h2>参加者 ${DB.members.length}人</h2><p>提出された希望コマ数と担当コマ数。</p></div>`));
+  const c=el(`<div class="card"></div>`);
+  if(!DB.members.length)c.appendChild(el(`<div class="row"><span class="txt"><b style="font-weight:400;color:var(--sub)">まだ提出がありません</b></span></div>`));
+  DB.members.forEach(p=>{
+    const n=Object.values(p.slots||{}).reduce((a,v)=>a+v.length,0);
+    const r=el(`<div class="row"><span class="txt"><b>${esc(p.name)}</b><span>希望${n}コマ ・ 担当${loadOf(p.name)}コマ</span></span>
+      <button class="btn-sm" style="color:var(--red);background:transparent">削除</button></div>`);
+    r.querySelector('button').onclick=async()=>{
+      if(await confirmSheet('参加者を削除',`${p.name} の希望シフトを削除します。`,'削除する')){
+        try{await sync('deleteMember',{name:p.name,pass:view.pass});render();toast('削除しました');}catch(e){toast(e.message);}
+      }
+    };
+    c.appendChild(r);
+  });
+  m.appendChild(c);
+}
+
+/* ---------- 設定 ---------- */
+function screenSettings(m){
+  nav('設定',{label:'戻る',fn:()=>go('admin')},null);
+  const s=JSON.parse(JSON.stringify(S));
+  const c0=el(`<div class="card pad"><div class="field"><label>シフト表のタイトル</label>
+    <input id="ttl" value="${esc(s.title)}"></div></div>`);
+  m.appendChild(c0);
+
+  m.appendChild(el(`<div class="card-title">各日の時間帯と必要人数</div>`));
+  const c1=el(`<div class="card pad"></div>`);
+  s.days.forEach((d,i)=>{
+    const f=el(`<div class="field"><label>${esc(d.key)}（${esc(d.dow)}）${esc(d.label)}</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" data-k="start" data-i="${i}" value="${d.start}" min="0" max="23" style="width:74px">
+        <span style="color:var(--sub)">時 〜</span>
+        <input type="number" data-k="end" data-i="${i}" value="${d.end}" min="1" max="24" style="width:74px">
+        <span style="color:var(--sub)">時</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <span style="color:var(--sub);font-size:13px">営業時間外の必要人数</span>
+        <input type="number" data-k="need" data-i="${i}" value="${d.need}" min="0" max="20" style="width:74px">
+      </div>
+      ${d.open?`<div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <span style="color:var(--sub);font-size:13px">営業時間</span>
+        <input type="number" data-o="0" data-i="${i}" value="${d.open[0]}" min="0" max="23" style="width:74px">
+        <span style="color:var(--sub)">–</span>
+        <input type="number" data-o="1" data-i="${i}" value="${d.open[1]}" min="1" max="24" style="width:74px">
+      </div>`:''}</div>`);
+    c1.appendChild(f);
+  });
+  m.appendChild(c1);
+
+  m.appendChild(el(`<div class="card-title">営業中（10:00–17:00）の役割と人数</div>`));
+  const c2=el(`<div class="card pad"></div>`);
+  s.roles.forEach((r,i)=>{
+    c2.appendChild(el(`<div class="field"><label>${esc(r.name)}</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" data-r="min" data-i="${i}" value="${r.min}" min="0" max="10" style="width:74px">
+        <span style="color:var(--sub)">〜</span>
+        <input type="number" data-r="max" data-i="${i}" value="${r.max}" min="1" max="10" style="width:74px">
+        <span style="color:var(--sub)">人</span>
+      </div></div>`));
+  });
+  m.appendChild(c2);
+
+  const sv=el(`<div style="margin-top:16px"><button class="btn" id="sv">設定を保存</button>
+    <p class="hint">営業時間の枠だけ役割ごとの配置になります。それ以外の時間は人数だけを割り当てます。</p></div>`);
+  m.appendChild(sv);
+  $('#sv',sv).onclick=async()=>{
+    s.title=$('#ttl',c0).value.trim()||'学祭シフト';
+    c1.querySelectorAll('input').forEach(inp=>{
+      const i=+inp.dataset.i;
+      if(inp.dataset.o!==undefined)s.days[i].open[+inp.dataset.o]=+inp.value;
+      else s.days[i][inp.dataset.k]=+inp.value;
+    });
+    c2.querySelectorAll('input').forEach(inp=>{s.roles[+inp.dataset.i][inp.dataset.r]=+inp.value;});
+    try{await sync('saveSettings',{settings:s,pass:view.pass});toast('保存しました');go('admin');}
+    catch(e){toast(e.message);}
+  };
+}
+
+/* =========================================================
+   5. 画像書き出し
+   ========================================================= */
+let exMode='day';
+function screenExport(m){
+  nav('画像で書き出す',{label:'戻る',fn:()=>go('home')},null);
+  const seg=el(`<div class="seg" style="margin-top:14px">
+    <button data-m="day" aria-selected="${exMode==='day'}"><b>1日ごと</b><small>4枚に分ける</small></button>
+    <button data-m="all" aria-selected="${exMode==='all'}"><b>4日まとめ</b><small>1枚にする</small></button></div>`);
+  m.appendChild(seg);
+  seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{exMode=b.dataset.m;render();});
+
+  if(exMode==='day'){
+    const dseg=el(`<div class="seg"></div>`);
+    S.days.forEach((d,i)=>{
+      const b=el(`<button aria-selected="${i===view.day}"><b>${esc(d.key)}</b><small>${esc(d.dow)}</small></button>`);
+      b.onclick=()=>{view.day=i;render();};
+      dseg.appendChild(b);
+    });
+    m.appendChild(dseg);
+  }
+
+  const holder=el(`<div id="pv"></div>`);m.appendChild(holder);
+  const canvas=drawSheet(exMode==='all'?S.days:[S.days[view.day]]);
+  const url=canvas.toDataURL('image/png');
+  holder.appendChild(el(`<div class="preview"><img src="${url}" alt="シフト表"></div>`));
+  const fname=(exMode==='all'?`${S.title}_11.13-16`:`${S.title}_${S.days[view.day].key.replace('/','.')}`)+'.png';
+  const dl=el(`<div><button class="btn" id="dl">${ico('i-export',17)} 画像を保存</button>
+    <p class="hint">iPhoneでは上の画像を長押しして「写真に追加」でも保存できます。</p></div>`);
+  m.appendChild(dl);
+  $('#dl',dl).onclick=()=>{
+    canvas.toBlob(b=>{
+      const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fname;a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+      toast('保存しました');
+    },'image/png');
+  };
+}
+
+/* シフト表をCanvasに描画 */
+function drawSheet(days){
+  const SC=2, W=1180, PAD=44, LINE=30;
+  const colsOf=d=>d.open?S.roles.map(r=>r.name):['担当'];
+  /* 高さ計測 */
+  const plan=days.map(d=>{
+    const hs=hoursOf(d), rows=hs.map(h=>{
+      const l=listAt(d.key,h);
+      if(!isOpen(d,h)){                       /* 営業時間外は役割なしで横並び */
+        const names=l.map(v=>v.n);
+        const lines=Math.max(1,Math.ceil(names.length/4));
+        return {h,merged:true,names,hgt:Math.max(52,lines*LINE+22)};
+      }
+      const cols=colsOf(d).map(cn=>l.filter(v=>(v.r||WORK)===cn).map(v=>v.n));
+      const lines=Math.max(1,...cols.map(c=>c.length));
+      return {h,cols,hgt:Math.max(52,lines*LINE+22)};
+    });
+    return {d,rows,hgt:0};
+  });
+  plan.forEach(p=>p.hgt=140+p.rows.reduce((a,r)=>a+r.hgt,0));
+  const H=PAD+82+plan.reduce((a,p)=>a+p.hgt,0)+30;
+
+  const cv=document.createElement('canvas');
+  cv.width=W*SC;cv.height=H*SC;
+  const x=cv.getContext('2d');x.scale(SC,SC);
+  const F='"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",-apple-system,sans-serif';
+  x.fillStyle='#FFFFFF';x.fillRect(0,0,W,H);
+  x.textBaseline='middle';
+
+  /* 全体タイトル */
+  x.fillStyle='#1D1D1F';x.font=`700 34px ${F}`;x.textAlign='left';
+  x.fillText(S.title,PAD,PAD+8);
+  x.fillStyle='#8A8A8E';x.font=`400 17px ${F}`;
+  x.fillText('2026年11月13日（金）– 16日（月）',PAD,PAD+42);
+
+  let y=PAD+82;
+  plan.forEach(p=>{
+    const d=p.d, cols=colsOf(d), CW=(W-PAD*2-150)/cols.length;
+    /* 日ヘッダ */
+    x.fillStyle='#1D1D1F';x.font=`700 25px ${F}`;
+    x.fillText(`${d.key}（${d.dow}）`,PAD,y+16);
+    x.fillStyle='#0071E3';x.font=`600 16px ${F}`;
+    x.fillText(d.label,PAD+180,y+17);
+    if(d.open){
+      x.fillStyle='#FF9500';
+      x.fillText(`営業 ${d.open[0]}:00–${d.open[1]}:00`,PAD+300,y+17);
+    }
+    y+=52;
+
+    /* 列見出し */
+    x.fillStyle='#F7F7FA';x.fillRect(PAD,y,W-PAD*2,42);
+    x.fillStyle='#8A8A8E';x.font=`600 14px ${F}`;
+    x.fillText('時間',PAD+16,y+21);
+    cols.forEach((c,i)=>x.fillText(c,PAD+150+CW*i+16,y+21));
+    y+=42;
+
+    p.rows.forEach(r=>{
+      const open=isOpen(d,r.h);
+      if(open){x.fillStyle='#FFFBF4';x.fillRect(PAD,y,W-PAD*2,r.hgt);}
+      else if(d.open){x.fillStyle='#FBFBFC';x.fillRect(PAD,y,W-PAD*2,r.hgt);}
+      x.strokeStyle='#E5E5EA';x.lineWidth=1;
+      x.beginPath();x.moveTo(PAD,y+.5);x.lineTo(W-PAD,y+.5);x.stroke();
+      /* 時間 */
+      x.fillStyle=open?'#B35C00':'#1D1D1F';x.font=`600 17px ${F}`;
+      x.fillText(`${r.h}:00`,PAD+16,y+r.hgt/2-9);
+      x.fillStyle='#8A8A8E';x.font=`400 13px ${F}`;
+      x.fillText(`– ${r.h+1}:00`,PAD+16,y+r.hgt/2+11);
+      /* 名前 */
+      if(r.merged){
+        const MW=(W-PAD*2-150)/4;
+        if(d.open){
+          x.fillStyle='#A1A1A6';x.font=`600 12px ${F}`;
+          x.fillText(r.h<d.open[0]?'準備':'片付け',PAD+92,y+r.hgt/2);
+        }
+        x.strokeStyle='#EFEFF2';x.beginPath();x.moveTo(PAD+150.5,y);x.lineTo(PAD+150.5,y+r.hgt);x.stroke();
+        if(!r.names.length){
+          x.fillStyle='#C7C7CC';x.font=`400 15px ${F}`;x.fillText('—',PAD+166,y+r.hgt/2);
+        }else{
+          x.font=`500 17px ${F}`;x.fillStyle='#1D1D1F';
+          r.names.forEach((n,j)=>x.fillText(n,PAD+166+MW*(j%4),y+11+LINE/2+Math.floor(j/4)*LINE));
+        }
+      }else{
+        r.cols.forEach((names,i)=>{
+          const cx=PAD+150+CW*i;
+          x.strokeStyle='#EFEFF2';x.beginPath();x.moveTo(cx+.5,y);x.lineTo(cx+.5,y+r.hgt);x.stroke();
+          if(!names.length){
+            x.fillStyle='#C7C7CC';x.font=`400 15px ${F}`;x.fillText('—',cx+16,y+r.hgt/2);
+          }else{
+            x.font=`500 17px ${F}`;x.fillStyle='#1D1D1F';
+            names.forEach((n,j)=>x.fillText(n,cx+16,y+11+LINE/2+j*LINE));
+          }
+        });
+      }
+      y+=r.hgt;
+    });
+    x.strokeStyle='#D2D2D7';x.beginPath();x.moveTo(PAD,y+.5);x.lineTo(W-PAD,y+.5);x.stroke();
+    y+=46;
+  });
+  return cv;
+}
+
+/* =========================================================
+   起動
+   ========================================================= */
+async function boot(){
+  const m=$('#main');
+  if(!gasUrl()&&!isLocal())return render();
+  m.innerHTML='<div class="load"><div class="spin"></div>読み込んでいます</div>';
+  try{ await sync('bootstrap'); render(); }
+  catch(e){
+    m.innerHTML='';
+    m.appendChild(el(`<div class="lead"><h2>接続できません</h2><p>${esc(e.message)}</p></div>`));
+    const c=el(`<div class="card pad"><button class="btn" id="r">もう一度試す</button>
+      <button class="btn ghost" id="c" style="margin-top:6px">接続先を変更</button></div>`);
+    m.appendChild(c);
+    $('#r',c).onclick=boot;
+    $('#c',c).onclick=()=>{store.del(LS_URL);store.del(LS_LOCAL);render();};
+  }
+}
+boot();
+</script>
+</body>
+</html>
