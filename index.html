@@ -185,6 +185,7 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwwnPIFKMrknMzVIzlpUPSe
 // ================================================================
 
 const LS_URL='gakusaiShift.url', LS_NAME='gakusaiShift.name', LS_LOCAL='gakusaiShift.local', LS_DB='gakusaiShift.localdb';
+const LS_SET='gakusaiShift.settings', LS_ME='gakusaiShift.me';
 
 /* サンドボックス環境でも落ちない保存領域 */
 const store=(()=>{
@@ -211,7 +212,9 @@ const DEFAULT_SETTINGS={
 const WORK='担当';
 
 let DB={members:[],assign:{},settings:null};
-let S=DEFAULT_SETTINGS;
+const cached=k=>{try{return JSON.parse(store.get(k)||'null');}catch(e){return null;}};
+let S=Object.assign({},DEFAULT_SETTINGS,cached(LS_SET)||{});   /* 前回の設定で即描画 */
+let myRec=cached(LS_ME);                                        /* 自分の提出内容 */
 let view={screen:'member',day:0,name:'',pass:''};
 
 /* =========================================================
@@ -229,10 +232,16 @@ function localSave(db){store.set(LS_DB,JSON.stringify(db));return db;}
 async function api(action,payload={}){
   if(isLocal()){
     const db=localDB();
+    if(action==='init'){
+      const me=db.members.find(m=>m.name===payload.name);
+      return {settings:db.settings,me:me?{slots:me.slots,updatedAt:me.updatedAt}:null};
+    }
     if(action==='saveAvailability'){
       const i=db.members.findIndex(m=>m.name===payload.name);
       const rec={name:payload.name,slots:payload.slots,updatedAt:stamp()};
       if(i<0)db.members.push(rec); else db.members[i]=rec;
+      localSave(db);
+      return {updatedAt:rec.updatedAt};
     }
     if(action==='saveAssign')  db.assign=payload.assign;
     if(action==='saveSettings')db.settings=payload.settings;
@@ -253,8 +262,19 @@ function stamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return 
 async function sync(action,payload){
   DB=await api(action,payload||{});
   S=Object.assign({},DEFAULT_SETTINGS,DB.settings||{});
+  if(DB.settings)store.set(LS_SET,JSON.stringify(DB.settings));
   if(!DB.assign)DB.assign={};
   return DB;
+}
+
+/* 入力画面用の軽い初期化（設定と自分の提出内容だけ取得する） */
+async function quickInit(){
+  const name=store.get(LS_NAME)||'';
+  const d=await api('init',{name});
+  if(d.settings){S=Object.assign({},DEFAULT_SETTINGS,d.settings);store.set(LS_SET,JSON.stringify(d.settings));}
+  if(name&&d.me){myRec={name,slots:d.me.slots,updatedAt:d.me.updatedAt};store.set(LS_ME,JSON.stringify(myRec));}
+  else if(name){myRec=null;store.del(LS_ME);}
+  return d;
 }
 
 /* =========================================================
@@ -337,15 +357,22 @@ function askPass(){
     <button class="btn ghost" id="no" style="margin-top:4px">閉じる</button>`);
   const inp=bg.querySelector('#pw');
   setTimeout(()=>inp.focus(),80);
+  const okBtn=bg.querySelector('#ok');
   const enter=async()=>{
-    const p=inp.value;
-    try{ if(!isLocal())await api('checkPass',{pass:p}); view.pass=p; bg.remove(); go('adminHome'); }
-    catch(e){ toast(e.message); }
+    if(okBtn.disabled)return;
+    okBtn.disabled=true;okBtn.textContent='読み込み中…';
+    try{
+      await sync('bootstrap',{pass:inp.value});   /* 確認と読み込みを1往復で行う */
+      view.pass=inp.value; bg.remove(); go('adminHome');
+    }catch(e){
+      toast(e.message);okBtn.disabled=false;okBtn.textContent='開く';
+    }
   };
   bg.querySelector('#ok').onclick=enter;
   bg.querySelector('#no').onclick=()=>bg.remove();
   inp.onkeydown=e=>{if(e.key==='Enter')enter();};
 }
+
 
 /* =========================================================
    1. 接続設定
@@ -420,7 +447,7 @@ function screenAdminHome(m){
   const foot=el(`<div style="margin-top:22px"><button class="btn ghost" id="reload">最新の状態に更新</button>
     ${embedded?'':'<button class="btn ghost" id="reset">接続先を変更</button>'}</div>`);
   m.appendChild(foot);
-  $('#reload',foot).onclick=async()=>{try{await sync('bootstrap');render();toast('更新しました');}catch(e){toast(e.message);}};
+  $('#reload',foot).onclick=async()=>{try{await sync('bootstrap',{pass:view.pass});render();toast('更新しました');}catch(e){toast(e.message);}};
   if($('#reset',foot))$('#reset',foot).onclick=async()=>{
     if(await confirmSheet('接続先を変更しますか','この端末の接続設定を消去します。シートのデータは残ります。','変更する')){
       store.del(LS_URL);store.del(LS_LOCAL);render();
@@ -431,23 +458,23 @@ function screenAdminHome(m){
 /* =========================================================
    3. 希望シフト入力
    ========================================================= */
-let draft={name:'',slots:{},init:false};
+let draft={name:'',slots:{},init:false,dirty:false};
 function initDraft(name){
-  const found=DB.members.find(p=>p.name===name);
-  draft={name:name||'',slots:found?JSON.parse(JSON.stringify(found.slots||{})):{},init:true};
+  const mine=(myRec&&myRec.name===name)?myRec.slots:null;
+  draft={name:name||'',slots:mine?JSON.parse(JSON.stringify(mine)):{},init:true,dirty:false};
 }
 function screenMember(m){
   nav(S.title,null,view.pass?{label:'管理',fn:()=>go('adminHome')}:null);
   if(!draft.init)initDraft(store.get(LS_NAME)||'');
-  const done=DB.members.find(p=>p.name===draft.name.trim());
+  const done=myRec&&myRec.name===draft.name.trim()?myRec.updatedAt:'';
   m.appendChild(el(`<div class="lead"><h2>出られる時間を選ぶ</h2>
-    <p>11月13日（金）から16日（月）まで。${done?'提出済みです。変更したらもう一度提出してください。':'空いている時間をタップして、最後に提出してください。'}</p></div>`));
+    <p>11月13日（金）から16日（月）まで。${done?'提出済み（'+esc(done)+'）。直したらもう一度提出してください。':'空いている時間をタップして、最後に提出してください。'}</p></div>`));
   const nameCard=el(`<div class="card pad">
     <div class="field"><label>名前</label>
       <input id="nm" placeholder="山田 太郎" value="${esc(draft.name)}" autocapitalize="off"></div>
     <p class="hint">同じ名前で入力すると前回の内容を上書きします。</p></div>`);
   m.appendChild(nameCard);
-  $('#nm',nameCard).oninput=e=>{draft.name=e.target.value;};
+  $('#nm',nameCard).oninput=e=>{draft.name=e.target.value;draft.dirty=true;};
 
   const seg=el(`<div class="seg" role="tablist"></div>`);
   S.days.forEach((d,i)=>{
@@ -473,6 +500,7 @@ function screenMember(m){
       <span class="mark">${ico('i-check',13)}</span><span>${hhmm(h)}–${hhmm(h+1)}</span></button>`);
     b.onclick=()=>{
       const i=sel.indexOf(h); if(i<0)sel.push(h); else sel.splice(i,1);
+      draft.dirty=true;
       b.setAttribute('aria-pressed',sel.includes(h));
     };
     list.appendChild(b);
@@ -481,7 +509,7 @@ function screenMember(m){
   q.querySelectorAll('button').forEach(b=>b.onclick=()=>{
     const a=b.dataset.a, hs=hoursOf(d);
     draft.slots[d.key]= a==='all'?hs.slice() : a==='am'?hs.filter(h=>h<12) : a==='pm'?hs.filter(h=>h>=12) : [];
-    render();
+    draft.dirty=true;render();
   });
   m.appendChild(card);
 
@@ -493,13 +521,14 @@ function screenMember(m){
   $('#sv',save).onclick=async()=>{
     const nm=draft.name.trim();
     if(!nm)return toast('名前を入力してください');
-    $('#sv',save).disabled=true;
+    const btn=$('#sv',save);btn.disabled=true;btn.textContent='提出中…';
     try{
-      await sync('saveAvailability',{name:nm,slots:draft.slots});
-      store.set(LS_NAME,nm);
+      const r=await api('saveAvailability',{name:nm,slots:draft.slots});
+      myRec={name:nm,slots:JSON.parse(JSON.stringify(draft.slots)),updatedAt:(r&&r.updatedAt)||''};
+      store.set(LS_ME,JSON.stringify(myRec));store.set(LS_NAME,nm);
       draft.init=false;
       toast('提出しました。ありがとうございます');render();
-    }catch(e){toast(e.message);$('#sv',save).disabled=false;}
+    }catch(e){toast(e.message);btn.disabled=false;btn.textContent=`提出する（全${total}コマ）`;}
   };
 }
 
@@ -876,18 +905,23 @@ function drawSheet(days){
    起動
    ========================================================= */
 async function boot(){
-  const m=$('#main');
   if(!gasUrl()&&!isLocal())return render();
-  m.innerHTML='<div class="load"><div class="spin"></div>読み込んでいます</div>';
-  try{ await sync('bootstrap'); render(); }
-  catch(e){
-    m.innerHTML='';
-    m.appendChild(el(`<div class="lead"><h2>接続できません</h2><p>${esc(e.message)}</p></div>`));
-    const c=el(`<div class="card pad"><button class="btn" id="r">もう一度試す</button>
-      <button class="btn ghost" id="c" style="margin-top:6px">接続先を変更</button></div>`);
-    m.appendChild(c);
-    $('#r',c).onclick=boot;
-    $('#c',c).onclick=()=>{store.del(LS_URL);store.del(LS_LOCAL);render();};
+  render();                               /* 通信を待たず、前回の設定で即表示する */
+  const before=JSON.stringify([S,myRec]);
+  try{
+    await quickInit();
+    if(view.screen==='member'&&!draft.dirty&&before!==JSON.stringify([S,myRec])){
+      draft.init=false;render();          /* 変化があったときだけ描き直す */
+    }
+  }catch(e){
+    if(view.screen==='member'&&!$('#neterr')){
+      const c=el(`<div class="card pad" id="neterr" style="margin-top:8px">
+        <b style="font-size:15px">サーバーに接続できていません</b>
+        <p class="hint" style="margin-top:4px">入力はできますが、提出できるか確認してください。${esc(e.message)}</p>
+        <button class="btn sec" id="rt" style="margin-top:10px">再接続</button></div>`);
+      $('#main').appendChild(c);
+      $('#rt',c).onclick=()=>{c.remove();boot();};
+    }
   }
 }
 boot();
