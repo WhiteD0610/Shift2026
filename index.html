@@ -180,9 +180,9 @@ input,select{font:inherit;color:inherit}
 /* =========================================================
    設定
    ========================================================= */
-/* ★★ ここにGASウェブアプリのURL（末尾 /exec）を貼る ★★ */
-const GAS_URL='https://script.google.com/macros/s/AKfycbwwnPIFKMrknMzVIzlpUPSeEnKaKqvpSZ0Mri8UWS8R2aFVxfVsF8bw7HeC-8aajy_EWQ/exec';
-/* ★★ ここまで ★★ */
+// ===== ここにGASのWebアプリURL（/exec で終わるもの）を貼る =====
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwwnPIFKMrknMzVIzlpUPSeEnKaKqvpSZ0Mri8UWS8R2aFVxfVsF8bw7HeC-8aajy_EWQ/exec';
+// ================================================================
 
 const LS_URL='gakusaiShift.url', LS_NAME='gakusaiShift.name', LS_LOCAL='gakusaiShift.local', LS_DB='gakusaiShift.localdb';
 
@@ -647,18 +647,52 @@ function screenSettings(m){
   });
   m.appendChild(c1);
 
-  m.appendChild(el(`<div class="card-title">営業中（10:00–17:00）の役割と人数</div>`));
+  m.appendChild(el(`<div class="card-title">営業中の役割と人数</div>`));
+  s.roles.forEach(r=>{r.orig=r.name;});
+  const removed=[];
   const c2=el(`<div class="card pad"></div>`);
-  s.roles.forEach((r,i)=>{
-    c2.appendChild(el(`<div class="field"><label>${esc(r.name)}</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" data-r="min" data-i="${i}" value="${r.min}" min="0" max="10" style="width:74px">
-        <span style="color:var(--sub)">〜</span>
-        <input type="number" data-r="max" data-i="${i}" value="${r.max}" min="1" max="10" style="width:74px">
-        <span style="color:var(--sub)">人</span>
-      </div></div>`));
-  });
+  function collectRoles(){
+    c2.querySelectorAll('[data-row]').forEach(row=>{
+      const r=s.roles[+row.dataset.row];
+      r.name=row.querySelector('[data-f="name"]').value;
+      r.min=+row.querySelector('[data-f="min"]').value;
+      r.max=+row.querySelector('[data-f="max"]').value;
+    });
+  }
+  function drawRoles(){
+    c2.innerHTML='';
+    s.roles.forEach((r,i)=>{
+      const row=el(`<div class="field" data-row="${i}">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input data-f="name" value="${esc(r.name)}" placeholder="役割の名前" style="flex:1;min-width:0">
+          <button class="btn-sm" data-del style="color:var(--red);background:transparent;flex:none">削除</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <span style="color:var(--sub);font-size:13px">1時間あたり</span>
+          <input type="number" data-f="min" value="${r.min}" min="0" max="20" style="width:72px">
+          <span style="color:var(--sub)">〜</span>
+          <input type="number" data-f="max" value="${r.max}" min="1" max="20" style="width:72px">
+          <span style="color:var(--sub)">人</span>
+        </div></div>`);
+      row.querySelector('[data-del]').onclick=async()=>{
+        collectRoles();
+        if(s.roles.length<=1)return toast('役割は1つ以上必要です');
+        const r2=s.roles[i];
+        if(await confirmSheet('役割を削除',`「${r2.name}」を削除します。この役割に割り当て済みの人も外れます。`,'削除する')){
+          if(r2.orig)removed.push(r2.orig);
+          s.roles.splice(i,1);drawRoles();
+        }
+      };
+      c2.appendChild(row);
+    });
+    const add=el(`<button class="btn sec" style="margin:14px 0 4px">${ico('i-plus',16)} 役割を追加</button>`);
+    add.onclick=()=>{collectRoles();s.roles.push({name:'',min:1,max:1});drawRoles();
+      const inputs=c2.querySelectorAll('[data-f="name"]');inputs[inputs.length-1].focus();};
+    c2.appendChild(add);
+  }
+  drawRoles();
   m.appendChild(c2);
+  m.appendChild(el(`<p class="hint">役割は営業時間の枠だけで使います。名前を変えると、割り当て済みの人もそのまま新しい名前に移ります。</p>`));
 
   const sv=el(`<div style="margin-top:16px"><button class="btn" id="sv">設定を保存</button>
     <p class="hint">営業時間の枠だけ役割ごとの配置になります。それ以外の時間は人数だけを割り当てます。</p></div>`);
@@ -670,9 +704,30 @@ function screenSettings(m){
       if(inp.dataset.o!==undefined)s.days[i].open[+inp.dataset.o]=+inp.value;
       else s.days[i][inp.dataset.k]=+inp.value;
     });
-    c2.querySelectorAll('input').forEach(inp=>{s.roles[+inp.dataset.i][inp.dataset.r]=+inp.value;});
-    try{await sync('saveSettings',{settings:s,pass:view.pass});toast('保存しました');go('adminHome');}
-    catch(e){toast(e.message);}
+    collectRoles();
+    const names=s.roles.map(r=>r.name.trim());
+    if(names.some(n=>!n))return toast('役割の名前を入力してください');
+    if(new Set(names).size!==names.length)return toast('役割の名前が重複しています');
+    s.roles.forEach((r,i)=>{r.name=names[i];if(r.max<r.min)r.max=r.min;});
+
+    /* 割り当て済みデータを新しい役割名に追従させる */
+    const rename={};s.roles.forEach(r=>{if(r.orig&&r.orig!==r.name)rename[r.orig]=r.name;});
+    let touched=false;
+    const newAssign=JSON.parse(JSON.stringify(DB.assign));
+    if(removed.length||Object.keys(rename).length){
+      for(const dk in newAssign)for(const h in newAssign[dk]){
+        const before=newAssign[dk][h];
+        const after=before.filter(v=>!(v.r&&removed.includes(v.r)))
+                          .map(v=>v.r&&rename[v.r]?{n:v.n,r:rename[v.r]}:v);
+        if(after.length!==before.length||after.some((v,i)=>v.r!==before[i].r)){newAssign[dk][h]=after;touched=true;}
+      }
+    }
+    s.roles.forEach(r=>{delete r.orig;});
+    try{
+      if(touched)await sync('saveAssign',{assign:newAssign,pass:view.pass});
+      await sync('saveSettings',{settings:s,pass:view.pass});
+      toast('保存しました');go('adminHome');
+    }catch(e){toast(e.message);}
   };
 }
 
@@ -717,8 +772,9 @@ function screenExport(m){
 
 /* シフト表をCanvasに描画 */
 function drawSheet(days){
-  const SC=2, W=1180, PAD=44, LINE=30;
+  const SC=2, PAD=44, LINE=30;
   const colsOf=d=>d.open?S.roles.map(r=>r.name):['担当'];
+  const W=Math.max(1180,PAD*2+150+Math.max(...days.map(d=>colsOf(d).length))*260);
   /* 高さ計測 */
   const plan=days.map(d=>{
     const hs=hoursOf(d), rows=hs.map(h=>{
