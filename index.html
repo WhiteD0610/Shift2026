@@ -32,7 +32,8 @@ input,select{font:inherit;color:inherit}
   backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
   border-bottom:.5px solid var(--sep);
 }
-.nav h1{flex:1;margin:0;font-size:17px;font-weight:600;text-align:center;letter-spacing:.02em}
+.nav h1{flex:1;margin:0;font-size:17px;font-weight:600;text-align:center;letter-spacing:.02em;
+  cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;transition:opacity .1s}
 .nav .slot{min-width:76px;display:flex;align-items:center}
 .nav .slot.right{justify-content:flex-end}
 .navbtn{display:inline-flex;align-items:center;gap:3px;color:var(--blue);font-size:16px;padding:6px 4px;border-radius:8px}
@@ -248,14 +249,57 @@ async function api(action,payload={}){
     if(action==='deleteMember')db.members=db.members.filter(m=>m.name!==payload.name);
     return localSave(db);
   }
-  const res=await fetch(gasUrl(),{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify(Object.assign({action},payload))
-  });
-  const j=await res.json();
-  if(!j.ok)throw new Error(j.error||'通信に失敗しました');
+  const url=gasUrl();
+  if(!url)throw new Error('GASのURLが設定されていません。HTMLの GAS_URL に /exec のURLを貼ってください。');
+  let res;
+  try{
+    res=await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(Object.assign({action},payload))
+    });
+  }catch(e){
+    throw new Error(location.protocol==='file:'
+      ? 'file:// で開いているため通信できません。GitHub Pagesなど https:// のURLから開いてください。'
+      : 'サーバーに接続できません。通信環境かGASのURLを確認してください。');
+  }
+  const text=await res.text();
+  let j;
+  try{ j=JSON.parse(text); }
+  catch(e){
+    if(/^\s*</.test(text))
+      throw new Error('GASがJSONではなくページを返しました（HTTP '+res.status+'）。デプロイの「アクセスできるユーザー」を全員にして、新バージョンで再デプロイしてください。');
+    throw new Error('応答を読み取れません（HTTP '+res.status+'）: '+text.slice(0,100));
+  }
+  if(!j.ok)throw new Error(j.error||'サーバーでエラーが発生しました');
   return j.data;
+}
+
+/* 接続診断 */
+async function diagnose(){
+  const lines=[];
+  lines.push('URL: '+(gasUrl()||'未設定'));
+  lines.push('開き方: '+location.protocol);
+  if(isLocal())lines.push('モード: この端末だけ（サーバー未使用）');
+  const t0=Date.now();
+  let okFlag=false;
+  try{
+    const d=await api('ping',{});
+    okFlag=true;
+    lines.push('接続: 成功（'+(Date.now()-t0)+'ms）');
+    lines.push('スプレッドシート: '+(d.sheet||'?'));
+    lines.push('提出済み人数: '+d.members);
+    lines.push('サーバー時刻: '+(d.time||'?'));
+  }catch(e){
+    lines.push('接続: 失敗（'+(Date.now()-t0)+'ms）');
+    lines.push('内容: '+e.message);
+    if(/不明な操作/.test(e.message))lines.push('対処: Code.gsが古い版です。貼り直して「デプロイを管理→編集→新バージョン」で更新してください。');
+    if(/openById|SHEET_ID|スプレッドシート/.test(e.message))lines.push('対処: Code.gs の SHEET_ID にスプレッドシートのIDを入れて再デプロイしてください。');
+  }
+  const bg=sheet(`<h3>接続診断</h3><p class="sub">${okFlag?'スプレッドシートと通信できています。':'通信できていません。下の内容を確認してください。'}</p>
+    <div style="background:var(--fill);border-radius:12px;padding:12px;font-size:13px;line-height:1.8;word-break:break-all">${lines.map(esc).join('<br>')}</div>
+    <button class="btn" id="cl" style="margin-top:14px">閉じる</button>`);
+  bg.querySelector('#cl').onclick=()=>bg.remove();
 }
 function stamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;}
 
@@ -343,14 +387,32 @@ function render(){
     export:screenExport,settings:screenSettings,people:screenPeople}[view.screen]||screenMember)(m);
 }
 
-/* タイトルを3回タップで管理者メニューを開く */
-let taps=0,tapT;
-$('#navTitle').addEventListener('click',()=>{
-  if(view.screen!=='member')return;
-  taps++;clearTimeout(tapT);tapT=setTimeout(()=>{taps=0;},1500);
-  if(taps>=3){taps=0;view.pass?go('adminHome'):askPass();}
+/* タイトルを3回タップ、または長押しで管理者メニューを開く */
+let taps=0,tapT,pressT;
+const titleEl=$('#navTitle');
+function openAdmin(){
+  clearTimeout(pressT);taps=0;
+  if(document.querySelector('.sheet-bg'))return;   /* 二重で開かない */
+  view.pass?go('adminHome'):askPass();
+}
+function tapTitle(){
+  taps++;clearTimeout(tapT);tapT=setTimeout(()=>{taps=0;},2500);
+  titleEl.style.opacity='.4';setTimeout(()=>{titleEl.style.opacity='';},110);
+  if(taps>=3)openAdmin();
+}
+let lastPtr=0;
+titleEl.addEventListener('pointerdown',()=>{
+  lastPtr=Date.now();tapTitle();
+  clearTimeout(pressT);pressT=setTimeout(openAdmin,1000);     /* 長押しでも開く */
+});
+['pointerup','pointercancel','pointerleave','pointermove'].forEach(ev=>
+  titleEl.addEventListener(ev,()=>clearTimeout(pressT)));
+titleEl.addEventListener('click',()=>{                        /* pointer非対応の保険 */
+  if(Date.now()-lastPtr<800)return;
+  tapTitle();
 });
 function askPass(){
+  if(document.querySelector('.sheet-bg'))return;
   const bg=sheet(`<h3>管理者メニュー</h3><p class="sub">シフトの割り当てと書き出しに進みます。</p>
     <div class="field"><label>パスワード</label><input id="pw" type="password" autocomplete="off"></div>
     <button class="btn" id="ok" style="margin-top:12px">開く</button>
@@ -445,8 +507,10 @@ function screenAdminHome(m){
 
   const embedded=/^https:\/\/script\.google\.com\/.+\/exec$/.test(GAS_URL);
   const foot=el(`<div style="margin-top:22px"><button class="btn ghost" id="reload">最新の状態に更新</button>
+    <button class="btn ghost" id="diag">接続を診断する</button>
     ${embedded?'':'<button class="btn ghost" id="reset">接続先を変更</button>'}</div>`);
   m.appendChild(foot);
+  $('#diag',foot).onclick=diagnose;
   $('#reload',foot).onclick=async()=>{try{await sync('bootstrap',{pass:view.pass});render();toast('更新しました');}catch(e){toast(e.message);}};
   if($('#reset',foot))$('#reset',foot).onclick=async()=>{
     if(await confirmSheet('接続先を変更しますか','この端末の接続設定を消去します。シートのデータは残ります。','変更する')){
@@ -466,9 +530,10 @@ function initDraft(name){
 function screenMember(m){
   nav(S.title,null,view.pass?{label:'管理',fn:()=>go('adminHome')}:null);
   if(!draft.init)initDraft(store.get(LS_NAME)||'');
-  const done=myRec&&myRec.name===draft.name.trim()?myRec.updatedAt:'';
+  const mine=!!(myRec&&myRec.name===draft.name.trim());
+  const when=mine&&myRec.updatedAt?'（'+esc(myRec.updatedAt)+'）':'';
   m.appendChild(el(`<div class="lead"><h2>出られる時間を選ぶ</h2>
-    <p>11月13日（金）から16日（月）まで。${done?'提出済み（'+esc(done)+'）。直したらもう一度提出してください。':'空いている時間をタップして、最後に提出してください。'}</p></div>`));
+    <p>11月13日（金）から16日（月）まで。${mine?'提出済み'+when+'。直したらもう一度提出してください。':'空いている時間をタップして、最後に提出してください。'}</p></div>`));
   const nameCard=el(`<div class="card pad">
     <div class="field"><label>名前</label>
       <input id="nm" placeholder="山田 太郎" value="${esc(draft.name)}" autocapitalize="off"></div>
@@ -528,7 +593,16 @@ function screenMember(m){
       store.set(LS_ME,JSON.stringify(myRec));store.set(LS_NAME,nm);
       draft.init=false;
       toast('提出しました。ありがとうございます');render();
-    }catch(e){toast(e.message);btn.disabled=false;btn.textContent=`提出する（全${total}コマ）`;}
+    }catch(e){
+      btn.disabled=false;btn.textContent=`提出する（全${total}コマ）`;
+      const old=$('#sverr');if(old)old.remove();
+      const c=el(`<div class="card pad" id="sverr" style="margin-top:10px">
+        <b style="font-size:15px;color:var(--red)">提出できませんでした</b>
+        <p class="hint" style="margin-top:4px">${esc(e.message)}</p>
+        <button class="btn sec" id="dg" style="margin-top:10px">接続を診断する</button></div>`);
+      save.appendChild(c);
+      $('#dg',c).onclick=diagnose;
+    }
   };
 }
 
@@ -907,6 +981,7 @@ function drawSheet(days){
 async function boot(){
   if(!gasUrl()&&!isLocal())return render();
   render();                               /* 通信を待たず、前回の設定で即表示する */
+  if(location.hash==='#admin')openAdmin(); /* URL末尾に #admin でも開ける */
   const before=JSON.stringify([S,myRec]);
   try{
     await quickInit();
@@ -918,9 +993,11 @@ async function boot(){
       const c=el(`<div class="card pad" id="neterr" style="margin-top:8px">
         <b style="font-size:15px">サーバーに接続できていません</b>
         <p class="hint" style="margin-top:4px">入力はできますが、提出できるか確認してください。${esc(e.message)}</p>
-        <button class="btn sec" id="rt" style="margin-top:10px">再接続</button></div>`);
+        <button class="btn sec" id="rt" style="margin-top:10px">再接続</button>
+        <button class="btn ghost" id="dg2" style="margin-top:4px">接続を診断する</button></div>`);
       $('#main').appendChild(c);
       $('#rt',c).onclick=()=>{c.remove();boot();};
+      $('#dg2',c).onclick=diagnose;
     }
   }
 }
